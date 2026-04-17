@@ -1,83 +1,111 @@
+import streamlit as st
 import pandas as pd
 import joblib
+import plotly.express as px
 
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import (
-    accuracy_score,
-    classification_report,
-    confusion_matrix,
-    roc_auc_score
-)
+st.set_page_config(page_title="Heart Disease Dashboard", layout="wide")
 
-# =========================
-# LOAD DATA
-# =========================
-df = pd.read_csv("heart.csv")
+@st.cache_data
+def load_data():
+    df = pd.read_csv("heart.csv")
+    df = df.drop_duplicates()
+    return df
 
-print("Original shape:", df.shape)
+@st.cache_resource
+def load_model():
+    return joblib.load("model.pkl")
 
-# Remove duplicates
-df = df.drop_duplicates()
+df = load_data()
+model = load_model()
 
-print("After removing duplicates:", df.shape)
-print("\nMissing values:\n", df.isnull().sum())
-print("\nTarget distribution:\n", df["target"].value_counts())
+st.title("Heart Disease Prediction and Analytics Dashboard")
 
-# =========================
-# FEATURES / TARGET
-# =========================
-X = df.drop("target", axis=1)
-y = df["target"]
+tab1, tab2, tab3 = st.tabs(["Prediction", "Dashboard", "Records"])
 
-# =========================
-# TRAIN / TEST SPLIT
-# =========================
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y,
-    test_size=0.2,
-    random_state=42,
-    stratify=y
-)
+with tab1:
+    st.subheader("Heart Disease Prediction")
 
-# =========================
-# MODELS
-# =========================
-log_model = LogisticRegression(max_iter=2000)
-rf_model = RandomForestClassifier(
-    n_estimators=200,
-    random_state=42
-)
+    col1, col2, col3 = st.columns(3)
 
-# Train
-log_model.fit(X_train, y_train)
-rf_model.fit(X_train, y_train)
+    with col1:
+        age = st.number_input("Age", 20, 100, 50)
+        sex = st.selectbox("Sex", [0, 1])
+        cp = st.selectbox("Chest Pain Type (cp)", [0, 1, 2, 3])
+        trestbps = st.number_input("Resting Blood Pressure", 80, 250, 120)
+        chol = st.number_input("Cholesterol", 100, 600, 200)
 
-# =========================
-# EVALUATION FUNCTION
-# =========================
-def evaluate_model(name, model, X_test, y_test):
-    pred = model.predict(X_test)
-    prob = model.predict_proba(X_test)[:, 1]
+    with col2:
+        fbs = st.selectbox("Fasting Blood Sugar > 120", [0, 1])
+        restecg = st.selectbox("Rest ECG", [0, 1, 2])
+        thalach = st.number_input("Max Heart Rate", 60, 250, 150)
+        exang = st.selectbox("Exercise Induced Angina", [0, 1])
+        oldpeak = st.number_input("Oldpeak", 0.0, 10.0, 1.0, step=0.1)
 
-    print(f"\n{'='*50}")
-    print(f"{name}")
-    print(f"{'='*50}")
-    print("Accuracy:", round(accuracy_score(y_test, pred), 4))
-    print("ROC-AUC :", round(roc_auc_score(y_test, prob), 4))
-    print("\nConfusion Matrix:\n", confusion_matrix(y_test, pred))
-    print("\nClassification Report:\n", classification_report(y_test, pred))
+    with col3:
+        slope = st.selectbox("Slope", [0, 1, 2])
+        ca = st.selectbox("CA", [0, 1, 2, 3, 4])
+        thal = st.selectbox("Thal", [0, 1, 2, 3])
 
-# Evaluate both
-evaluate_model("Logistic Regression", log_model, X_test, y_test)
-evaluate_model("Random Forest", rf_model, X_test, y_test)
+    if st.button("Predict"):
+        input_data = pd.DataFrame([{
+            "age": age,
+            "sex": sex,
+            "cp": cp,
+            "trestbps": trestbps,
+            "chol": chol,
+            "fbs": fbs,
+            "restecg": restecg,
+            "thalach": thalach,
+            "exang": exang,
+            "oldpeak": oldpeak,
+            "slope": slope,
+            "ca": ca,
+            "thal": thal
+        }])
 
-# =========================
-# CHOOSE BEST MODEL
-# =========================
-# For now, we save Random Forest
-best_model = rf_model
+        prediction = model.predict(input_data)[0]
+        probability = model.predict_proba(input_data)[0][1]
 
-joblib.dump(best_model, "model.pkl")
-print("\nModel saved as model.pkl")
+        if prediction == 1:
+            st.error("High risk of heart disease")
+        else:
+            st.success("Low risk of heart disease")
+
+        st.info(f"Predicted probability: {probability:.2%}")
+
+with tab2:
+    st.subheader("Analytics Dashboard")
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Total Records", len(df))
+    c2.metric("Heart Disease = 1", int((df["target"] == 1).sum()))
+    c3.metric("Heart Disease = 0", int((df["target"] == 0).sum()))
+
+    fig1 = px.histogram(df, x="age", color="target", barmode="group", title="Age Distribution by Target")
+    st.plotly_chart(fig1, use_container_width=True)
+
+    fig2 = px.box(df, x="target", y="chol", color="target", title="Cholesterol by Target")
+    st.plotly_chart(fig2, use_container_width=True)
+
+    fig3 = px.scatter(df, x="age", y="thalach", color="target", title="Age vs Max Heart Rate")
+    st.plotly_chart(fig3, use_container_width=True)
+
+    feature_importance = pd.DataFrame({
+        "Feature": model.feature_names_in_,
+        "Importance": model.feature_importances_
+    }).sort_values("Importance", ascending=False)
+
+    fig4 = px.bar(feature_importance, x="Importance", y="Feature", orientation="h", title="Feature Importance")
+    st.plotly_chart(fig4, use_container_width=True)
+
+with tab3:
+    st.subheader("Patient Records")
+    st.dataframe(df, use_container_width=True)
+
+    csv = df.to_csv(index=False).encode("utf-8")
+    st.download_button(
+        label="Download Data as CSV",
+        data=csv,
+        file_name="heart_data.csv",
+        mime="text/csv"
+    )
