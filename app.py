@@ -10,7 +10,7 @@ import google.generativeai as genai
 st.set_page_config(page_title="Heart Disease Dashboard", layout="wide")
 
 # =========================
-# GEMINI SETUP (IMPORTANT)
+# GEMINI SETUP
 # =========================
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
@@ -98,20 +98,30 @@ with tab1:
 
         st.info(f"Predicted probability: {probability:.2%}")
 
-        # =========================
-        # GEMINI EXPLANATION
-        # =========================
         with st.spinner("Generating AI explanation..."):
             prompt = f"""
-            A patient has the following medical data:
-            Age: {age}, Sex: {sex}, Chest Pain: {cp}, Blood Pressure: {trestbps},
-            Cholesterol: {chol}, Max Heart Rate: {thalach}, etc.
+A patient has the following medical data:
+Age: {age}
+Sex: {sex}
+Chest Pain Type: {cp}
+Resting Blood Pressure: {trestbps}
+Cholesterol: {chol}
+Fasting Blood Sugar > 120: {fbs}
+Rest ECG: {restecg}
+Max Heart Rate: {thalach}
+Exercise Induced Angina: {exang}
+Oldpeak: {oldpeak}
+Slope: {slope}
+CA: {ca}
+Thal: {thal}
 
-            The model predicted: {risk_label} of heart disease with probability {probability:.2f}.
+The machine learning model predicted: {risk_label} of heart disease
+with probability {probability:.2%}.
 
-            Explain this result in simple, clear language for a non-medical person.
-            Also suggest basic lifestyle advice.
-            """
+Explain this result in simple language for a non-medical person.
+Give short lifestyle advice.
+Add a short warning that this is not a medical diagnosis.
+"""
 
             try:
                 explanation = ask_gemini(prompt)
@@ -131,34 +141,45 @@ with tab2:
     c2.metric("Heart Disease = 1", int((df["target"] == 1).sum()))
     c3.metric("Heart Disease = 0", int((df["target"] == 0).sum()))
 
-    fig1 = px.histogram(df, x="age", color="target", barmode="group", title="Age Distribution by Target")
+    fig1 = px.histogram(
+        df,
+        x="age",
+        color="target",
+        barmode="group",
+        title="Age Distribution by Target"
+    )
     st.plotly_chart(fig1, use_container_width=True)
 
-    fig2 = px.box(df, x="target", y="chol", color="target", title="Cholesterol by Target")
+    fig2 = px.box(
+        df,
+        x="target",
+        y="chol",
+        color="target",
+        title="Cholesterol by Target"
+    )
     st.plotly_chart(fig2, use_container_width=True)
 
-    fig3 = px.scatter(df, x="age", y="thalach", color="target", title="Age vs Max Heart Rate")
+    fig3 = px.scatter(
+        df,
+        x="age",
+        y="thalach",
+        color="target",
+        title="Age vs Max Heart Rate"
+    )
     st.plotly_chart(fig3, use_container_width=True)
 
+    feature_importance = pd.DataFrame({
+        "Feature": model.feature_names_in_,
+        "Importance": model.feature_importances_
+    }).sort_values("Importance", ascending=False)
 
-
-
-    try:
-    importance = model.feature_importances_
-except:
-    importance = abs(model.coef_[0])
-
-feature_importance = pd.DataFrame({
-    "Feature": model.feature_names_in_,
-    "Importance": importance
-}).sort_values("Importance", ascending=False)
-
-
-
-
-    
-
-    fig4 = px.bar(feature_importance, x="Importance", y="Feature", orientation="h", title="Feature Importance")
+    fig4 = px.bar(
+        feature_importance,
+        x="Importance",
+        y="Feature",
+        orientation="h",
+        title="Feature Importance"
+    )
     st.plotly_chart(fig4, use_container_width=True)
 
 # =========================
