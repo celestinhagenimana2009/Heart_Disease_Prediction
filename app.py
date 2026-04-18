@@ -2,9 +2,26 @@ import streamlit as st
 import pandas as pd
 import joblib
 import plotly.express as px
+import google.generativeai as genai
 
+# =========================
+# CONFIG
+# =========================
 st.set_page_config(page_title="Heart Disease Dashboard", layout="wide")
 
+# =========================
+# GEMINI SETUP (IMPORTANT)
+# =========================
+genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+
+def ask_gemini(prompt):
+    model = genai.GenerativeModel("gemini-pro")
+    response = model.generate_content(prompt)
+    return response.text
+
+# =========================
+# LOAD DATA & MODEL
+# =========================
 @st.cache_data
 def load_data():
     df = pd.read_csv("heart.csv")
@@ -18,10 +35,16 @@ def load_model():
 df = load_data()
 model = load_model()
 
+# =========================
+# TITLE
+# =========================
 st.title("Heart Disease Prediction and Analytics Dashboard")
 
 tab1, tab2, tab3 = st.tabs(["Prediction", "Dashboard", "Records"])
 
+# =========================
+# TAB 1: PREDICTION + AI
+# =========================
 with tab1:
     st.subheader("Heart Disease Prediction")
 
@@ -68,11 +91,38 @@ with tab1:
 
         if prediction == 1:
             st.error("High risk of heart disease")
+            risk_label = "High risk"
         else:
             st.success("Low risk of heart disease")
+            risk_label = "Low risk"
 
         st.info(f"Predicted probability: {probability:.2%}")
 
+        # =========================
+        # GEMINI EXPLANATION
+        # =========================
+        with st.spinner("Generating AI explanation..."):
+            prompt = f"""
+            A patient has the following medical data:
+            Age: {age}, Sex: {sex}, Chest Pain: {cp}, Blood Pressure: {trestbps},
+            Cholesterol: {chol}, Max Heart Rate: {thalach}, etc.
+
+            The model predicted: {risk_label} of heart disease with probability {probability:.2f}.
+
+            Explain this result in simple, clear language for a non-medical person.
+            Also suggest basic lifestyle advice.
+            """
+
+            try:
+                explanation = ask_gemini(prompt)
+                st.subheader("AI Explanation")
+                st.write(explanation)
+            except Exception as e:
+                st.error(f"Gemini error: {e}")
+
+# =========================
+# TAB 2: DASHBOARD
+# =========================
 with tab2:
     st.subheader("Analytics Dashboard")
 
@@ -98,6 +148,9 @@ with tab2:
     fig4 = px.bar(feature_importance, x="Importance", y="Feature", orientation="h", title="Feature Importance")
     st.plotly_chart(fig4, use_container_width=True)
 
+# =========================
+# TAB 3: RECORDS
+# =========================
 with tab3:
     st.subheader("Patient Records")
     st.dataframe(df, use_container_width=True)
