@@ -140,10 +140,23 @@ with tab2:
     fig3 = px.scatter(df, x="age", y="thalach", color="target", title="Age vs Max Heart Rate")
     st.plotly_chart(fig3, use_container_width=True)
 
-    feature_importance = pd.DataFrame({
-        "Feature": model.feature_names_in_,
-        "Importance": model.feature_importances_
-    }).sort_values("Importance", ascending=False)
+
+
+
+    try:
+    importance = model.feature_importances_
+except:
+    importance = abs(model.coef_[0])
+
+feature_importance = pd.DataFrame({
+    "Feature": model.feature_names_in_,
+    "Importance": importance
+}).sort_values("Importance", ascending=False)
+
+
+
+
+    
 
     fig4 = px.bar(feature_importance, x="Importance", y="Feature", orientation="h", title="Feature Importance")
     st.plotly_chart(fig4, use_container_width=True)
